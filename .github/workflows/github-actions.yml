@@ -8,19 +8,43 @@ on:
 jobs:
     unit-test:
         container: cuaesd/aesd-autotest:24-unit-test
-        runs-on: self-hosted
+        runs-on: ubuntu-24.04
         steps:
-          - uses: actions/checkout@v2
+          - uses: actions/checkout@v4
           - name: Checkout submodules
             run : git submodule update --init --recursive
           - name: Run unit test
             run: ./unit-test.sh
     full-test:
         container: cuaesd/aesd-autotest:24-assignment2
-        runs-on: self-hosted
+        runs-on: ubuntu-24.04
         steps:
-          - uses: actions/checkout@v2
+          - uses: actions/checkout@v4
           - name: Checkout submodules
             run : git submodule update --init --recursive
           - name: Run full test
             run: ./full-test.sh
+
+    cross-compile:
+        runs-on: ubuntu-24.04
+        steps:
+          - uses: actions/checkout@v4
+          - name: Install ARM toolchain and cross compile
+            shell: bash
+            run: |
+              set -euo pipefail
+              toolchain=arm-gnu-toolchain-13.3.rel1-x86_64-aarch64-none-linux-gnu
+              curl --fail --location --retry 3 "https://developer.arm.com/-/media/Files/downloads/gnu/13.3.rel1/binrel/${toolchain}.tar.xz" -o "$RUNNER_TEMP/toolchain.tar.xz"
+              tar -xf "$RUNNER_TEMP/toolchain.tar.xz" -C "$RUNNER_TEMP"
+              export PATH="$RUNNER_TEMP/${toolchain}/bin:$PATH"
+              mkdir -p assignments/assignment2
+              aarch64-none-linux-gnu-gcc -v > assignments/assignment2/cross-compile.txt 2>&1
+              aarch64-none-linux-gnu-gcc -print-sysroot >> assignments/assignment2/cross-compile.txt
+              make -C finder-app clean
+              make -C finder-app CROSS_COMPILE=aarch64-none-linux-gnu-
+              file finder-app/writer | tee assignments/assignment2/fileresult.txt
+              grep -q 'ARM aarch64' assignments/assignment2/fileresult.txt
+          - uses: actions/upload-artifact@v4
+            with:
+              name: assignment2-evidence
+              path: assignments/assignment2/*.txt
